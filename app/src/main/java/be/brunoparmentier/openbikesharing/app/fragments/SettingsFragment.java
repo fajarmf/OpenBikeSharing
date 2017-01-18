@@ -116,7 +116,7 @@ public class SettingsFragment extends PreferenceFragment implements SharedPrefer
 
         getPreferenceScreen().getSharedPreferences().registerOnSharedPreferenceChangeListener(this);
         updatePreference(PREF_KEY_API_URL);
-        updatePreference(PREF_KEY_NETWORK_ID);
+//        updatePreference(PREF_KEY_NETWORK_ID);
     }
 
     @Override

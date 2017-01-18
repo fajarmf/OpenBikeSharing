@@ -59,14 +59,14 @@
                 android:value=".activities.StationsListActivity" />
         </activity>
 
-        <activity
-            android:name=".activities.BikeNetworksListActivity"
-            android:label="@string/title_activity_networks_list"
-            android:parentActivityName=".activities.SettingsActivity">
-            <meta-data
-                android:name="android.support.PARENT_ACTIVITY"
-                android:value=".activities.SettingsActivity" />
-        </activity>
+        <!--<activity-->
+            <!--android:name=".activities.BikeNetworksListActivity"-->
+            <!--android:label="@string/title_activity_networks_list"-->
+            <!--android:parentActivityName=".activities.SettingsActivity">-->
+            <!--<meta-data-->
+                <!--android:name="android.support.PARENT_ACTIVITY"-->
+                <!--android:value=".activities.SettingsActivity" />-->
+        <!--</activity>-->
 
         <activity
             android:name=".activities.MapActivity"

@@ -172,7 +172,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
         boolean firstRun = settings.getString(PREF_KEY_NETWORK_ID, "").isEmpty();
         setDBLastUpdateText();
 
-        if (firstRun) {
+        if (firstRun && false) {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setMessage(R.string.welcome_dialog_message);
             builder.setTitle(R.string.welcome_dialog_title);
@@ -201,6 +201,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 String networkId = settings.getString(PREF_KEY_NETWORK_ID, "");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + networkId;
+                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
             }
@@ -229,6 +230,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 String networkId = settings.getString(PREF_KEY_NETWORK_ID, "");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + networkId;
+                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
             }
@@ -305,6 +307,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                         .getString(PREF_KEY_NETWORK_ID, "");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + networkId;
+                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
                 return true;
@@ -324,6 +327,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 Log.d(TAG, "RESULT_OK");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + data.getExtras().getString(KEY_NETWORK_ID);
+                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
             }
@@ -387,6 +391,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 .getString(PREF_KEY_NETWORK_ID, "");
         String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                 + "networks/" + networkId;
+        stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
         jsonDownloadTask = new JSONDownloadTask();
         jsonDownloadTask.execute(stationUrl);
     }

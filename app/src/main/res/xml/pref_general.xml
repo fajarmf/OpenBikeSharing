@@ -17,13 +17,13 @@
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <Preference
-        android:key="network-id"
-        android:title="@string/pref_title_bike_networks_list">
-        <intent
-            android:targetClass="be.brunoparmentier.openbikesharing.app.activities.BikeNetworksListActivity"
-            android:targetPackage="be.brunoparmentier.openbikesharing.app" />
-    </Preference>
+    <!--<Preference-->
+        <!--android:key="network-id"-->
+        <!--android:title="@string/pref_title_bike_networks_list">-->
+        <!--<intent-->
+            <!--android:targetClass="be.brunoparmentier.openbikesharing.app.activities.BikeNetworksListActivity"-->
+            <!--android:targetPackage="be.brunoparmentier.openbikesharing.app" />-->
+    <!--</Preference>-->
 
     <be.brunoparmentier.openbikesharing.app.preferences.UpdateListPreference
         android:defaultValue="mapnik"
