@@ -43,6 +43,7 @@ import be.brunoparmentier.openbikesharing.app.db.StationsDataSource;
 import be.brunoparmentier.openbikesharing.app.models.BikeNetwork;
 import be.brunoparmentier.openbikesharing.app.models.Station;
 import be.brunoparmentier.openbikesharing.app.parsers.BikeNetworkParser;
+import be.brunoparmentier.openbikesharing.app.parsers.TraccarPositionParser;
 
 
 /**
@@ -175,7 +176,7 @@ public class StationsListAppWidgetProvider extends AppWidgetProvider {
             } else {
                 try {
                     /* parse result */
-                    BikeNetworkParser bikeNetworkParser = new BikeNetworkParser(result, true);
+                    TraccarPositionParser bikeNetworkParser = new TraccarPositionParser(result, true);
                     BikeNetwork bikeNetwork = bikeNetworkParser.getNetwork();
 
                     stations = bikeNetwork.getStations();

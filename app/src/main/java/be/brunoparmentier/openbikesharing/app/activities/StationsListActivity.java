@@ -39,6 +39,7 @@ import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.text.format.DateUtils;
+import android.util.Base64;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -67,6 +68,7 @@ import be.brunoparmentier.openbikesharing.app.fragments.StationsListFragment;
 import be.brunoparmentier.openbikesharing.app.models.BikeNetwork;
 import be.brunoparmentier.openbikesharing.app.models.Station;
 import be.brunoparmentier.openbikesharing.app.parsers.BikeNetworkParser;
+import be.brunoparmentier.openbikesharing.app.parsers.TraccarPositionParser;
 import be.brunoparmentier.openbikesharing.app.widgets.StationsListAppWidgetProvider;
 
 
@@ -201,7 +203,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 String networkId = settings.getString(PREF_KEY_NETWORK_ID, "");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + networkId;
-                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
+                stationUrl = "http://track.kinet.is/api/positions";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
             }
@@ -230,7 +232,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 String networkId = settings.getString(PREF_KEY_NETWORK_ID, "");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + networkId;
-                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
+                stationUrl = "http://track.kinet.is/api/positions";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
             }
@@ -307,7 +309,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                         .getString(PREF_KEY_NETWORK_ID, "");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + networkId;
-                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
+                stationUrl = "http://track.kinet.is/api/positions";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
                 return true;
@@ -327,7 +329,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 Log.d(TAG, "RESULT_OK");
                 String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                         + "networks/" + data.getExtras().getString(KEY_NETWORK_ID);
-                stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
+                stationUrl = "http://track.kinet.is/api/positions";
                 jsonDownloadTask = new JSONDownloadTask();
                 jsonDownloadTask.execute(stationUrl);
             }
@@ -391,7 +393,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 .getString(PREF_KEY_NETWORK_ID, "");
         String stationUrl = settings.getString(PREF_KEY_API_URL, DEFAULT_API_URL)
                 + "networks/" + networkId;
-        stationUrl = "https://s3-ap-southeast-1.amazonaws.com/kinetis-bike/kinetis-bike";
+        stationUrl = "http://track.kinet.is/api/positions";
         jsonDownloadTask = new JSONDownloadTask();
         jsonDownloadTask.execute(stationUrl);
     }
@@ -456,6 +458,9 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
 
                 URL url = new URL(urls[0]);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
+                String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
+                conn.setRequestProperty ("Authorization", basicAuth);
                 if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
                     BufferedReader input = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                     String strLine;
@@ -485,7 +490,7 @@ public class StationsListActivity extends FragmentActivity implements ActionBar.
                 try {
                     /* parse result */
                     boolean stripId = settings.getBoolean(PREF_KEY_STRIP_ID_STATION, false);
-                    BikeNetworkParser bikeNetworkParser = new BikeNetworkParser(result, stripId);
+                    TraccarPositionParser bikeNetworkParser = new TraccarPositionParser(result, stripId);
                     bikeNetwork = bikeNetworkParser.getNetwork();
 
                     stations = bikeNetwork.getStations();
