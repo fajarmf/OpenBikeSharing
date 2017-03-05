@@ -55,6 +55,13 @@
             android:title="@string/pref_title_strip_station_id" />
     </PreferenceScreen>
 
+    <PreferenceScreen android:title="User Login">
+        <EditTextPreference
+            android:key="pref_user_login"
+            android:title="User Login" />
+
+    </PreferenceScreen>
+
     <PreferenceScreen android:title="@string/pref_title_about">
         <Preference
             android:key="pref_version"
