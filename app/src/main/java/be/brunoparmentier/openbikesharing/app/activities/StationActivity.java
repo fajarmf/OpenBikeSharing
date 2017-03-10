@@ -26,8 +26,11 @@ import android.content.pm.ResolveInfo;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.util.Base64;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -41,6 +44,11 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.List;
@@ -49,11 +57,15 @@ import java.util.TimeZone;
 
 import be.brunoparmentier.openbikesharing.app.R;
 import be.brunoparmentier.openbikesharing.app.db.StationsDataSource;
+import be.brunoparmentier.openbikesharing.app.models.BikeStatus;
 import be.brunoparmentier.openbikesharing.app.models.Station;
 import be.brunoparmentier.openbikesharing.app.models.StationStatus;
+import be.brunoparmentier.openbikesharing.app.models.TraccarAttribute;
+import be.brunoparmentier.openbikesharing.app.parsers.TraccarAttributeParser;
 import be.brunoparmentier.openbikesharing.app.widgets.StationsListAppWidgetProvider;
 
 public class StationActivity extends Activity {
+    private static final String TAG = StationActivity.class.getSimpleName();
     private static final String PREF_KEY_MAP_LAYER = "pref_map_layer";
     private static final String KEY_STATION = "station";
     private static final String MAP_LAYER_MAPNIK = "mapnik";
@@ -67,6 +79,7 @@ public class StationActivity extends Activity {
     private IMapController mapController;
     private MenuItem favStar;
     private StationsDataSource stationsDataSource;
+    private GetBikeStatusTask getBikeStatusTask;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -206,6 +219,8 @@ public class StationActivity extends Activity {
         }
 
         mapController.setCenter(stationLocation);
+        getBikeStatusTask = new GetBikeStatusTask();
+        getBikeStatusTask.execute(station.getId());
     }
 
     private void setLastUpdateText(String rawLastUpdateISO8601) {
@@ -272,11 +287,28 @@ public class StationActivity extends Activity {
             case R.id.action_favorite:
                 setFavorite(!isFavorite());
                 return true;
+            case R.id.action_order:
+                Log.i(TAG, "current bike status is " + station.getBikeStatus());
+                orderBike();
+                return true;
             case android.R.id.home:
                 finish();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
+        }
+    }
+
+    private void orderBike() {
+        switch (station.getBikeStatus()) {
+            case AVAILABLE:
+                new ReserveABikeTask();
+                Toast.makeText(this, "Please wait ...", Toast.LENGTH_LONG).show();
+                break;
+            case RESERVED:
+            case ON_TRIP:
+                Toast.makeText(this, "Is already reserved or on trip", Toast.LENGTH_LONG).show();
+                break;
         }
     }
 
@@ -307,5 +339,140 @@ public class StationActivity extends Activity {
         refreshWidgetIntent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
         refreshWidgetIntent.putExtra(StationsListAppWidgetProvider.EXTRA_REFRESH_LIST_ONLY, true);
         sendBroadcast(refreshWidgetIntent);
+    }
+
+    private class GetBikeStatusTask extends AsyncTask<String, Void, String> {
+        private static final String ATTRIBUTES_URL = "http://track.kinet.is/api/attributes/aliases?deviceId=";
+        private Exception error;
+
+        @Override
+        protected String doInBackground(String... bikeIds) {
+            if (bikeIds[0].isEmpty()) {
+                finish();
+            }
+            try {
+                StringBuilder response = new StringBuilder();
+
+                URL url = new URL(ATTRIBUTES_URL + bikeIds[0]);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
+                String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
+                conn.setRequestProperty ("Authorization", basicAuth);
+                if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    BufferedReader input = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    String strLine;
+                    while ((strLine = input.readLine()) != null) {
+                        response.append(strLine);
+                    }
+                    input.close();
+                }
+                return response.toString();
+            } catch (IOException e) {
+                error = e;
+                Log.d(TAG, e.getMessage());
+                return e.getMessage();
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            if (error != null) {
+                Log.d(TAG, error.getMessage());
+                Toast.makeText(getApplicationContext(),
+                        getApplicationContext().getResources().getString(R.string.connection_error),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Log.i(TAG, "bike status data: " + s);
+                try {
+                    TraccarAttributeParser parser = new TraccarAttributeParser(s);
+                    parser.getAttributeList();
+
+                    boolean attributeFound = false;
+                    for (TraccarAttribute attribute : parser.getAttributeList()) {
+                        if (attribute.getAlias().equals("BikeStatus")) {
+                            BikeStatus bikeStatus = BikeStatus.valueOf(attribute.getAttribute());
+                            station.setBikeStatus(bikeStatus);
+                            attributeFound = true;
+                            break;
+                        }
+                    }
+                    if (!attributeFound) {
+                        station.setBikeStatus(BikeStatus.AVAILABLE);
+                    }
+                } catch (ParseException e) {
+                    Log.e(TAG, e.getMessage());
+                    Toast.makeText(StationActivity.this,
+                            R.string.json_error, Toast.LENGTH_LONG).show();
+                }
+            }
+        }
+    }
+
+    private class ReserveABikeTask extends AsyncTask<String, Void, String> {
+        private static final String ATTRIBUTES_URL = "http://track.kinet.is/api/attributes/aliases";
+        private Exception error;
+
+        @Override
+        protected String doInBackground(String... bikeIds) {
+            if (bikeIds[0].isEmpty()) {
+                finish();
+            }
+            try {
+                StringBuilder response = new StringBuilder();
+
+                URL url = new URL(ATTRIBUTES_URL + bikeIds[0]);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
+                String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
+                conn.setRequestProperty ("Authorization", basicAuth);
+                conn.setRequestMethod("POST");
+                if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    BufferedReader input = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    String strLine;
+                    while ((strLine = input.readLine()) != null) {
+                        response.append(strLine);
+                    }
+                    input.close();
+                }
+                return response.toString();
+            } catch (IOException e) {
+                error = e;
+                Log.d(TAG, e.getMessage());
+                return e.getMessage();
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            if (error != null) {
+                Log.d(TAG, error.getMessage());
+                Toast.makeText(getApplicationContext(),
+                        getApplicationContext().getResources().getString(R.string.connection_error),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Log.i(TAG, "bike status data: " + s);
+                try {
+                    TraccarAttributeParser parser = new TraccarAttributeParser(s);
+                    parser.getAttributeList();
+
+                    boolean attributeFound = false;
+                    for (TraccarAttribute attribute : parser.getAttributeList()) {
+                        if (attribute.getAlias().equals("BikeStatus")) {
+                            BikeStatus bikeStatus = BikeStatus.valueOf(attribute.getAttribute());
+                            station.setBikeStatus(bikeStatus);
+                            attributeFound = true;
+                            break;
+                        }
+                    }
+                    if (!attributeFound) {
+                        station.setBikeStatus(BikeStatus.AVAILABLE);
+                    }
+                } catch (ParseException e) {
+                    Log.e(TAG, e.getMessage());
+                    Toast.makeText(StationActivity.this,
+                            R.string.json_error, Toast.LENGTH_LONG).show();
+                }
+            }
+        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015 Bruno Parmentier. This file is part of OpenBikeSharing.
+ * Copyright (c) 2017 Bruno Parmentier. This file is part of OpenBikeSharing.
  *
  * OpenBikeSharing is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,23 +15,12 @@
  * along with OpenBikeSharing.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+package be.brunoparmentier.openbikesharing.app.models;
 
-buildscript {
-    repositories {
-        jcenter()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:2.3.0'
-        classpath 'com.google.gms:google-services:3.0.0'
-    }
-}
+/**
+ * Created by idos on 10/03/17.
+ */
 
-allprojects {
-    repositories {
-        jcenter()
-        mavenCentral()
-        maven { url "https://jitpack.io" }
-    }
+public enum BikeStatus {
+    AVAILABLE, RESERVED, ON_TRIP
 }

@@ -35,6 +35,7 @@ public class Station implements Serializable, Comparable<Station> {
     private Boolean banking;
     private Boolean bonus;
     private StationStatus status;
+    private BikeStatus bikeStatus;
 
     public Station(String id, String name, String lastUpdate, double latitude, double longitude, int freeBikes, int emptySlots) {
         this.id = id;
@@ -115,5 +116,13 @@ public class Station implements Serializable, Comparable<Station> {
     public int compareTo(Station another) {
         return name.compareToIgnoreCase(another.getName()) > 0 ? 1 :
                 (name.compareToIgnoreCase(another.getName()) < 0 ? -1 : 0);
+    }
+
+    public BikeStatus getBikeStatus() {
+        return bikeStatus;
+    }
+
+    public void setBikeStatus(BikeStatus bikeStatus) {
+        this.bikeStatus = bikeStatus;
     }
 }

@@ -23,8 +23,15 @@
         android:id="@+id/action_favorite"
         android:icon="@drawable/ic_menu_favorite_outline"
         android:orderInCategory="100"
-        android:showAsAction="always"
+        android:showAsAction="ifRoom"
         android:title="@string/action_favorite" />
+
+    <item
+        android:id="@+id/action_order"
+        android:icon="@android:drawable/ic_input_add"
+        android:orderInCategory="100"
+        android:showAsAction="always"
+        android:title="@string/order" />
 
     <item
         android:id="@+id/action_directions"
