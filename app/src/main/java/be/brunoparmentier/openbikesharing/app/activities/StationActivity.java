@@ -29,6 +29,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.annotation.NonNull;
 import android.util.Base64;
 import android.util.Log;
 import android.view.Menu;
@@ -650,16 +651,7 @@ public class StationActivity extends Activity {
                 finish();
             }
             try {
-                URL url = new URL(ATTRIBUTES_URL);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
-                String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
-                conn.setDoInput(true);
-                conn.setDoOutput(true);
-                conn.setRequestProperty ("Authorization", basicAuth);
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("Accept", "application/json");
-                conn.setRequestMethod("POST");
+                HttpURLConnection conn = getTraccarConnection();
 
                 JSONObject reservedPayload = new JSONObject();
                 reservedPayload.put("alias", "BikeStatus");
@@ -689,6 +681,21 @@ public class StationActivity extends Activity {
                 Log.d(TAG, e.getMessage());
                 return e.getMessage();
             }
+        }
+
+        @NonNull
+        private HttpURLConnection getTraccarConnection() throws IOException {
+            URL url = new URL(ATTRIBUTES_URL);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
+            String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
+            conn.setDoInput(true);
+            conn.setDoOutput(true);
+            conn.setRequestProperty ("Authorization", basicAuth);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestMethod("POST");
+            return conn;
         }
 
         @Override
