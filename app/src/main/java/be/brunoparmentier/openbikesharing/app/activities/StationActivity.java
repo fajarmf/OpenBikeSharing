@@ -68,6 +68,8 @@ import be.brunoparmentier.openbikesharing.app.models.TraccarBikeStatus;
 import be.brunoparmentier.openbikesharing.app.parsers.TraccarAttributeParser;
 import be.brunoparmentier.openbikesharing.app.widgets.StationsListAppWidgetProvider;
 
+import static be.brunoparmentier.openbikesharing.app.fragments.SettingsFragment.PREF_KEY_USER_LOGIN;
+
 public class StationActivity extends Activity {
     private static final String TAG = StationActivity.class.getSimpleName();
     private static final String PREF_KEY_MAP_LAYER = "pref_map_layer";
@@ -324,20 +326,36 @@ public class StationActivity extends Activity {
     }
 
     private void orderBike() {
-        switch (station.getBikeStatus()) {
-            case AVAILABLE:
-                new ReserveABikeTask().execute(station.getId());
-                break;
-            case RESERVED_BY_ME:
-                new StartTripTask().execute(station.getId());
-                break;
-            case ON_TRIP:
-                new EndTripTask().execute(station.getId());
-                break;
-            case RESERVED_BY_OTHER:
-                Toast.makeText(this, "Sorry it has been reserved by other user", Toast.LENGTH_SHORT).show();
-                break;
+        if (isLoggedIn()) {
+            switch (station.getBikeStatus()) {
+                case AVAILABLE:
+                    new ReserveABikeTask().execute(station.getId());
+                    break;
+                case RESERVED_BY_ME:
+                    new StartTripTask().execute(station.getId());
+                    break;
+                case ON_TRIP:
+                    new EndTripTask().execute(station.getId());
+                    break;
+                case RESERVED_BY_OTHER:
+                    Toast.makeText(this, R.string.error_bike_used_by_other, Toast.LENGTH_SHORT).show();
+                    break;
+            }
+        } else {
+            Toast.makeText(this, R.string.login_before_booking, Toast.LENGTH_LONG).show();
         }
+    }
+
+    private boolean isLoggedIn() {
+        String userLogin = getUserLogin();
+        return userLogin != null && !userLogin.trim().isEmpty();
+    }
+
+    private String getUserLogin() {
+        String userLogin = PreferenceManager
+                .getDefaultSharedPreferences(this)
+                .getString(PREF_KEY_USER_LOGIN, "");
+        return userLogin;
     }
 
     private Uri getStationLocationUri() {
@@ -368,6 +386,45 @@ public class StationActivity extends Activity {
         refreshWidgetIntent.putExtra(StationsListAppWidgetProvider.EXTRA_REFRESH_LIST_ONLY, true);
         sendBroadcast(refreshWidgetIntent);
     }
+
+    private void updateBikeStatus(List<TraccarAttribute> attributeList) {
+        TraccarBikeStatus traccarBikeStatus = null;
+        String userId = null;
+        for (TraccarAttribute attribute : attributeList) {
+            if (attribute.getAlias().equals("BikeStatus") && attribute.getAttribute() != null) {
+                String temp[] = attribute.getAttribute().split(" ");
+                traccarBikeStatus = TraccarBikeStatus.valueOf(temp[0]);
+                if (temp.length > 1) {
+                    userId = temp[1];
+                }
+            }
+        }
+        if (traccarBikeStatus != null) {
+            switch (traccarBikeStatus) {
+                case AVAILABLE:
+                    station.setBikeStatus(BikeStatus.AVAILABLE);
+                    break;
+                case ON_TRIP:
+                    if (userId != null && userId.equals(getUserLogin()) && isLoggedIn()) {
+                        station.setBikeStatus(BikeStatus.ON_TRIP);
+                    } else {
+                        station.setBikeStatus(BikeStatus.RESERVED_BY_OTHER);
+                    }
+                    break;
+                case RESERVED:
+                    if (userId != null && userId.equals(getUserLogin()) && isLoggedIn()) {
+                        station.setBikeStatus(BikeStatus.RESERVED_BY_ME);
+                    } else {
+                        station.setBikeStatus(BikeStatus.RESERVED_BY_OTHER);
+                    }
+                    break;
+            }
+        } else {
+            station.setBikeStatus(BikeStatus.AVAILABLE);
+        }
+        updateReserveBikeMenuIcon();
+    }
+
 
     private class GetBikeStatusTask extends AsyncTask<String, Void, String> {
         private static final String ATTRIBUTES_URL = "http://track.kinet.is/api/attributes/aliases?deviceId=";
@@ -413,20 +470,7 @@ public class StationActivity extends Activity {
                 Log.i(TAG, "bike status data: " + s);
                 try {
                     TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.LIST);
-                    parser.getAttributeList();
-
-                    boolean attributeFound = false;
-                    for (TraccarAttribute attribute : parser.getAttributeList()) {
-                        if (attribute.getAlias().equals("BikeStatus")) {
-                            BikeStatus bikeStatus = BikeStatus.valueOf(attribute.getAttribute());
-                            station.setBikeStatus(bikeStatus);
-                            attributeFound = true;
-                            break;
-                        }
-                    }
-                    if (!attributeFound) {
-                        station.setBikeStatus(BikeStatus.AVAILABLE);
-                    }
+                    updateBikeStatus(parser.getAttributeList());
                 } catch (ParseException e) {
                     Log.e(TAG, e.getMessage());
                     Toast.makeText(StationActivity.this,
@@ -464,7 +508,7 @@ public class StationActivity extends Activity {
 
                 JSONObject reservedPayload = new JSONObject();
                 reservedPayload.put("alias", "BikeStatus");
-                reservedPayload.put("attribute", BikeStatus.RESERVED_BY_ME.name());
+                reservedPayload.put("attribute", TraccarBikeStatus.RESERVED.name() + " " + getUserLogin());
                 reservedPayload.put("deviceId", bikeIds[0]);
 
                 OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
@@ -513,24 +557,6 @@ public class StationActivity extends Activity {
         }
     }
 
-    private void updateBikeStatus(List<TraccarAttribute> attributeList) {
-        TraccarBikeStatus traccarBikeStatus = null;
-        String userId = null;
-        for (TraccarAttribute attribute : attributeList) {
-            if (attribute.getAlias().equals("BikeStatus")) {
-                traccarBikeStatus = TraccarBikeStatus.valueOf(attribute.getAttribute());
-            } else if (attribute.getAlias().equals("User")) {
-                userId = attribute.getAttribute();
-            }
-        }
-        if (traccarBikeStatus == null || userId == null || traccarBikeStatus == TraccarBikeStatus.AVAILABLE) {
-            station.setBikeStatus(BikeStatus.AVAILABLE);
-        } else {
-            String currentUserId = System
-        }
-        Toast.makeText(StationActivity.this, "Bike status is now: " + station.getBikeStatus(), Toast.LENGTH_LONG).show();
-    }
-
     private class StartTripTask extends AsyncTask<String, Void, String> {
         private static final String ATTRIBUTES_URL = "http://track.kinet.is/api/attributes/aliases";
         private Exception error;
@@ -559,7 +585,7 @@ public class StationActivity extends Activity {
 
                 JSONObject reservedPayload = new JSONObject();
                 reservedPayload.put("alias", "BikeStatus");
-                reservedPayload.put("attribute", BikeStatus.ON_TRIP.name());
+                reservedPayload.put("attribute", TraccarBikeStatus.ON_TRIP.name() + " " + getUserLogin());
                 reservedPayload.put("deviceId", bikeIds[0]);
 
                 OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
@@ -598,21 +624,7 @@ public class StationActivity extends Activity {
                 Log.i(TAG, "bike status data: " + s);
                 try {
                     TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.SINGLE);
-                    parser.getAttributeList();
-
-                    boolean attributeFound = false;
-                    for (TraccarAttribute attribute : parser.getAttributeList()) {
-                        if (attribute.getAlias().equals("BikeStatus")) {
-                            BikeStatus bikeStatus = BikeStatus.valueOf(attribute.getAttribute());
-                            station.setBikeStatus(bikeStatus);
-                            attributeFound = true;
-                            break;
-                        }
-                    }
-                    if (!attributeFound) {
-                        station.setBikeStatus(BikeStatus.AVAILABLE);
-                    }
-                    updateReserveBikeMenuIcon();
+                    updateBikeStatus(parser.getAttributeList());
                     Toast.makeText(StationActivity.this, "Bike status is now: " + station.getBikeStatus(), Toast.LENGTH_LONG).show();
                 } catch (ParseException e) {
                     Log.e(TAG, e.getMessage());
@@ -651,7 +663,7 @@ public class StationActivity extends Activity {
 
                 JSONObject reservedPayload = new JSONObject();
                 reservedPayload.put("alias", "BikeStatus");
-                reservedPayload.put("attribute", BikeStatus.AVAILABLE.name());
+                reservedPayload.put("attribute", TraccarBikeStatus.AVAILABLE.name() + " " + getUserLogin());
                 reservedPayload.put("deviceId", bikeIds[0]);
 
                 OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
@@ -690,21 +702,7 @@ public class StationActivity extends Activity {
                 Log.i(TAG, "bike status data: " + s);
                 try {
                     TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.SINGLE);
-                    parser.getAttributeList();
-
-                    boolean attributeFound = false;
-                    for (TraccarAttribute attribute : parser.getAttributeList()) {
-                        if (attribute.getAlias().equals("BikeStatus")) {
-                            BikeStatus bikeStatus = BikeStatus.valueOf(attribute.getAttribute());
-                            station.setBikeStatus(bikeStatus);
-                            attributeFound = true;
-                            break;
-                        }
-                    }
-                    if (!attributeFound) {
-                        station.setBikeStatus(BikeStatus.AVAILABLE);
-                    }
-                    updateReserveBikeMenuIcon();
+                    updateBikeStatus(parser.getAttributeList());
                     Toast.makeText(StationActivity.this, "Bike status is now: " + station.getBikeStatus(), Toast.LENGTH_LONG).show();
                 } catch (ParseException e) {
                     Log.e(TAG, e.getMessage());

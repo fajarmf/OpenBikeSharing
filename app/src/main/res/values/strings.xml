@@ -132,4 +132,6 @@
     <string name="pref_title_api_url">API URL</string>
     <string name="pref_title_default_tab">Default tab</string>
     <string name="order">Order</string>
+    <string name="login_before_booking">Please login from settings menu before booking a bike</string>
+    <string name="error_bike_used_by_other">Sorry it has been reserved by other user</string>
 </resources>
