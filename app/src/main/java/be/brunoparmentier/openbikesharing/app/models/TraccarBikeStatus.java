@@ -17,11 +17,6 @@
 
 package be.brunoparmentier.openbikesharing.app.models;
 
-/**
- * Created by idos on 10/03/17.
- */
-
-public enum BikeStatus {
-    AVAILABLE, RESERVED_BY_ME, RESERVED_BY_OTHER, ON_TRIP
+public enum TraccarBikeStatus {
+    AVAILABLE, RESERVED, ON_TRIP
 }
-

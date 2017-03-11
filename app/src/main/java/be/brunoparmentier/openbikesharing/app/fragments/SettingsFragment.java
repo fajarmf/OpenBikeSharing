@@ -49,7 +49,7 @@ public class SettingsFragment extends PreferenceFragment implements SharedPrefer
     private static final String PREF_KEY_NETWORK_NAME = "network-name";
     private static final String PREF_KEY_NETWORK_CITY = "network-city";
     private static final String PREF_KEY_API_URL = "pref_api_url";
-    private static final String PREF_KEY_USER_LOGIN = "pref_user_login";
+    public static final String PREF_KEY_USER_LOGIN = "pref_user_login";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {

@@ -36,27 +36,42 @@ import be.brunoparmentier.openbikesharing.app.models.TraccarAttribute;
 public class TraccarAttributeParser {
     private final List<TraccarAttribute> attributeList;
 
-    public TraccarAttributeParser(String toParse) throws ParseException {
+    public TraccarAttributeParser(String toParse, Type type) throws ParseException {
         attributeList = new ArrayList<>();
 
         try {
-            JSONArray attributes = new JSONArray(toParse);
+            if (type == Type.SINGLE) {
+                JSONObject rawAttribute = new JSONObject(toParse);
+                TraccarAttribute attribute = parseSingle(rawAttribute);
+                attributeList.add(attribute);
+            } else {
+                JSONArray attributes = new JSONArray(toParse);
 
-            for (int i = 0 ; i < attributes.length() ; i ++) {
-                JSONObject rawAttribute = attributes.getJSONObject(i);
+                for (int i = 0 ; i < attributes.length() ; i ++) {
+                    JSONObject rawAttribute = attributes.getJSONObject(i);
 
-                String id = rawAttribute.getString("id");
-                int deviceId = rawAttribute.getInt("deviceId");
-                String attribute = rawAttribute.getString("attribute");
-                String alias = rawAttribute.getString("alias");
-                attributeList.add(new TraccarAttribute(id, deviceId, attribute, alias));
+                    TraccarAttribute attribute = parseSingle(rawAttribute);
+                    attributeList.add(attribute);
+                }
             }
         } catch (JSONException e) {
             throw new ParseException("Error parsing JSON", 0);
         }
     }
 
+    private TraccarAttribute parseSingle(JSONObject rawAttribute) throws JSONException {
+        String id = rawAttribute.getString("id");
+        int deviceId = rawAttribute.getInt("deviceId");
+        String attribute = rawAttribute.getString("attribute");
+        String alias = rawAttribute.getString("alias");
+        return new TraccarAttribute(id, deviceId, attribute, alias);
+    }
+
     public List<TraccarAttribute> getAttributeList() {
         return attributeList;
+    }
+
+    public enum Type {
+        SINGLE, LIST
     }
 }

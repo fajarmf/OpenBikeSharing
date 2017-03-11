@@ -38,6 +38,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.osmdroid.api.IMapController;
 import org.osmdroid.bonuspack.overlays.Marker;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
@@ -47,6 +49,7 @@ import org.osmdroid.views.MapView;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.ParseException;
@@ -61,6 +64,7 @@ import be.brunoparmentier.openbikesharing.app.models.BikeStatus;
 import be.brunoparmentier.openbikesharing.app.models.Station;
 import be.brunoparmentier.openbikesharing.app.models.StationStatus;
 import be.brunoparmentier.openbikesharing.app.models.TraccarAttribute;
+import be.brunoparmentier.openbikesharing.app.models.TraccarBikeStatus;
 import be.brunoparmentier.openbikesharing.app.parsers.TraccarAttributeParser;
 import be.brunoparmentier.openbikesharing.app.widgets.StationsListAppWidgetProvider;
 
@@ -78,6 +82,7 @@ public class StationActivity extends Activity {
     private MapView map;
     private IMapController mapController;
     private MenuItem favStar;
+    private MenuItem reserveBikeMenu;
     private StationsDataSource stationsDataSource;
     private GetBikeStatusTask getBikeStatusTask;
 
@@ -266,7 +271,26 @@ public class StationActivity extends Activity {
         } else {
             favStar.setIcon(R.drawable.ic_menu_favorite_outline);
         }
+        reserveBikeMenu = menu.findItem(R.id.action_order);
+        updateReserveBikeMenuIcon();
         return true;
+    }
+
+    private void updateReserveBikeMenuIcon() {
+        switch (station.getBikeStatus()) {
+            case AVAILABLE:
+                reserveBikeMenu.setIcon(android.R.drawable.ic_menu_add);
+                break;
+            case ON_TRIP:
+                reserveBikeMenu.setIcon(android.R.drawable.ic_media_play);
+                break;
+            case RESERVED_BY_ME:
+                reserveBikeMenu.setIcon(android.R.drawable.ic_delete);
+                break;
+            case RESERVED_BY_OTHER:
+                reserveBikeMenu.setIcon(android.R.drawable.button_onoff_indicator_off);
+                break;
+        }
     }
 
     @Override
@@ -302,12 +326,16 @@ public class StationActivity extends Activity {
     private void orderBike() {
         switch (station.getBikeStatus()) {
             case AVAILABLE:
-                new ReserveABikeTask();
-                Toast.makeText(this, "Please wait ...", Toast.LENGTH_LONG).show();
+                new ReserveABikeTask().execute(station.getId());
                 break;
-            case RESERVED:
+            case RESERVED_BY_ME:
+                new StartTripTask().execute(station.getId());
+                break;
             case ON_TRIP:
-                Toast.makeText(this, "Is already reserved or on trip", Toast.LENGTH_LONG).show();
+                new EndTripTask().execute(station.getId());
+                break;
+            case RESERVED_BY_OTHER:
+                Toast.makeText(this, "Sorry it has been reserved by other user", Toast.LENGTH_SHORT).show();
                 break;
         }
     }
@@ -384,7 +412,7 @@ public class StationActivity extends Activity {
             } else {
                 Log.i(TAG, "bike status data: " + s);
                 try {
-                    TraccarAttributeParser parser = new TraccarAttributeParser(s);
+                    TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.LIST);
                     parser.getAttributeList();
 
                     boolean attributeFound = false;
@@ -413,19 +441,37 @@ public class StationActivity extends Activity {
         private Exception error;
 
         @Override
+        protected void onPreExecute() {
+            Toast.makeText(StationActivity.this, "Reserving ...", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
         protected String doInBackground(String... bikeIds) {
             if (bikeIds[0].isEmpty()) {
                 finish();
             }
             try {
-                StringBuilder response = new StringBuilder();
-
-                URL url = new URL(ATTRIBUTES_URL + bikeIds[0]);
+                URL url = new URL(ATTRIBUTES_URL);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
                 String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
+                conn.setDoInput(true);
+                conn.setDoOutput(true);
                 conn.setRequestProperty ("Authorization", basicAuth);
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
                 conn.setRequestMethod("POST");
+
+                JSONObject reservedPayload = new JSONObject();
+                reservedPayload.put("alias", "BikeStatus");
+                reservedPayload.put("attribute", BikeStatus.RESERVED_BY_ME.name());
+                reservedPayload.put("deviceId", bikeIds[0]);
+
+                OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
+                wr.write(reservedPayload.toString());
+                wr.flush();
+
+                StringBuilder response = new StringBuilder();
                 if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
                     BufferedReader input = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                     String strLine;
@@ -436,6 +482,10 @@ public class StationActivity extends Activity {
                 }
                 return response.toString();
             } catch (IOException e) {
+                error = e;
+                Log.d(TAG, e.getMessage());
+                return e.getMessage();
+            } catch (JSONException e) {
                 error = e;
                 Log.d(TAG, e.getMessage());
                 return e.getMessage();
@@ -452,7 +502,102 @@ public class StationActivity extends Activity {
             } else {
                 Log.i(TAG, "bike status data: " + s);
                 try {
-                    TraccarAttributeParser parser = new TraccarAttributeParser(s);
+                    TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.SINGLE);
+                    updateBikeStatus(parser.getAttributeList());
+                } catch (ParseException e) {
+                    Log.e(TAG, e.getMessage());
+                    Toast.makeText(StationActivity.this,
+                            R.string.json_error, Toast.LENGTH_LONG).show();
+                }
+            }
+        }
+    }
+
+    private void updateBikeStatus(List<TraccarAttribute> attributeList) {
+        TraccarBikeStatus traccarBikeStatus = null;
+        String userId = null;
+        for (TraccarAttribute attribute : attributeList) {
+            if (attribute.getAlias().equals("BikeStatus")) {
+                traccarBikeStatus = TraccarBikeStatus.valueOf(attribute.getAttribute());
+            } else if (attribute.getAlias().equals("User")) {
+                userId = attribute.getAttribute();
+            }
+        }
+        if (traccarBikeStatus == null || userId == null || traccarBikeStatus == TraccarBikeStatus.AVAILABLE) {
+            station.setBikeStatus(BikeStatus.AVAILABLE);
+        } else {
+            String currentUserId = System
+        }
+        Toast.makeText(StationActivity.this, "Bike status is now: " + station.getBikeStatus(), Toast.LENGTH_LONG).show();
+    }
+
+    private class StartTripTask extends AsyncTask<String, Void, String> {
+        private static final String ATTRIBUTES_URL = "http://track.kinet.is/api/attributes/aliases";
+        private Exception error;
+
+        @Override
+        protected void onPreExecute() {
+            Toast.makeText(StationActivity.this, "Starting Trip ...", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        protected String doInBackground(String... bikeIds) {
+            if (bikeIds[0].isEmpty()) {
+                finish();
+            }
+            try {
+                URL url = new URL(ATTRIBUTES_URL);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
+                String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
+                conn.setDoInput(true);
+                conn.setDoOutput(true);
+                conn.setRequestProperty ("Authorization", basicAuth);
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setRequestMethod("POST");
+
+                JSONObject reservedPayload = new JSONObject();
+                reservedPayload.put("alias", "BikeStatus");
+                reservedPayload.put("attribute", BikeStatus.ON_TRIP.name());
+                reservedPayload.put("deviceId", bikeIds[0]);
+
+                OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
+                wr.write(reservedPayload.toString());
+                wr.flush();
+
+                StringBuilder response = new StringBuilder();
+                if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    BufferedReader input = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    String strLine;
+                    while ((strLine = input.readLine()) != null) {
+                        response.append(strLine);
+                    }
+                    input.close();
+                }
+                return response.toString();
+            } catch (IOException e) {
+                error = e;
+                Log.d(TAG, e.getMessage());
+                return e.getMessage();
+            } catch (JSONException e) {
+                error = e;
+                Log.d(TAG, e.getMessage());
+                return e.getMessage();
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            if (error != null) {
+                Log.d(TAG, error.getMessage());
+                Toast.makeText(getApplicationContext(),
+                        getApplicationContext().getResources().getString(R.string.connection_error),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Log.i(TAG, "bike status data: " + s);
+                try {
+                    TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.SINGLE);
                     parser.getAttributeList();
 
                     boolean attributeFound = false;
@@ -467,6 +612,100 @@ public class StationActivity extends Activity {
                     if (!attributeFound) {
                         station.setBikeStatus(BikeStatus.AVAILABLE);
                     }
+                    updateReserveBikeMenuIcon();
+                    Toast.makeText(StationActivity.this, "Bike status is now: " + station.getBikeStatus(), Toast.LENGTH_LONG).show();
+                } catch (ParseException e) {
+                    Log.e(TAG, e.getMessage());
+                    Toast.makeText(StationActivity.this,
+                            R.string.json_error, Toast.LENGTH_LONG).show();
+                }
+            }
+        }
+    }
+
+    private class EndTripTask extends AsyncTask<String, Void, String> {
+        private static final String ATTRIBUTES_URL = "http://track.kinet.is/api/attributes/aliases";
+        private Exception error;
+
+        @Override
+        protected void onPreExecute() {
+            Toast.makeText(StationActivity.this, "Ending trip...", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        protected String doInBackground(String... bikeIds) {
+            if (bikeIds[0].isEmpty()) {
+                finish();
+            }
+            try {
+                URL url = new URL(ATTRIBUTES_URL);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
+                String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
+                conn.setDoInput(true);
+                conn.setDoOutput(true);
+                conn.setRequestProperty ("Authorization", basicAuth);
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setRequestMethod("POST");
+
+                JSONObject reservedPayload = new JSONObject();
+                reservedPayload.put("alias", "BikeStatus");
+                reservedPayload.put("attribute", BikeStatus.AVAILABLE.name());
+                reservedPayload.put("deviceId", bikeIds[0]);
+
+                OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
+                wr.write(reservedPayload.toString());
+                wr.flush();
+
+                StringBuilder response = new StringBuilder();
+                if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    BufferedReader input = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    String strLine;
+                    while ((strLine = input.readLine()) != null) {
+                        response.append(strLine);
+                    }
+                    input.close();
+                }
+                return response.toString();
+            } catch (IOException e) {
+                error = e;
+                Log.d(TAG, e.getMessage());
+                return e.getMessage();
+            } catch (JSONException e) {
+                error = e;
+                Log.d(TAG, e.getMessage());
+                return e.getMessage();
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            if (error != null) {
+                Log.d(TAG, error.getMessage());
+                Toast.makeText(getApplicationContext(),
+                        getApplicationContext().getResources().getString(R.string.connection_error),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Log.i(TAG, "bike status data: " + s);
+                try {
+                    TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.SINGLE);
+                    parser.getAttributeList();
+
+                    boolean attributeFound = false;
+                    for (TraccarAttribute attribute : parser.getAttributeList()) {
+                        if (attribute.getAlias().equals("BikeStatus")) {
+                            BikeStatus bikeStatus = BikeStatus.valueOf(attribute.getAttribute());
+                            station.setBikeStatus(bikeStatus);
+                            attributeFound = true;
+                            break;
+                        }
+                    }
+                    if (!attributeFound) {
+                        station.setBikeStatus(BikeStatus.AVAILABLE);
+                    }
+                    updateReserveBikeMenuIcon();
+                    Toast.makeText(StationActivity.this, "Bike status is now: " + station.getBikeStatus(), Toast.LENGTH_LONG).show();
                 } catch (ParseException e) {
                     Log.e(TAG, e.getMessage());
                     Toast.makeText(StationActivity.this,
