@@ -88,6 +88,7 @@ public class StationActivity extends Activity {
     private MenuItem reserveBikeMenu;
     private StationsDataSource stationsDataSource;
     private GetBikeStatusTask getBikeStatusTask;
+    private String traccarStatusAttributeId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -280,19 +281,24 @@ public class StationActivity extends Activity {
     }
 
     private void updateReserveBikeMenuIcon() {
-        switch (station.getBikeStatus()) {
-            case AVAILABLE:
-                reserveBikeMenu.setIcon(android.R.drawable.ic_menu_add);
-                break;
-            case ON_TRIP:
-                reserveBikeMenu.setIcon(android.R.drawable.ic_media_play);
-                break;
-            case RESERVED_BY_ME:
-                reserveBikeMenu.setIcon(android.R.drawable.ic_delete);
-                break;
-            case RESERVED_BY_OTHER:
-                reserveBikeMenu.setIcon(android.R.drawable.button_onoff_indicator_off);
-                break;
+        if (station != null && station.getBikeStatus() != null) {
+            switch (station.getBikeStatus()) {
+                case AVAILABLE:
+                    reserveBikeMenu.setIcon(android.R.drawable.ic_menu_add);
+                    break;
+                case ON_TRIP:
+                    reserveBikeMenu.setIcon(android.R.drawable.ic_delete);
+                    break;
+                case RESERVED_BY_ME:
+                    reserveBikeMenu.setIcon(android.R.drawable.ic_media_play);
+                    break;
+                case RESERVED_BY_OTHER:
+                    reserveBikeMenu.setIcon(android.R.drawable.button_onoff_indicator_off);
+                    break;
+            }
+            reserveBikeMenu.setVisible(true);
+        } else {
+            reserveBikeMenu.setVisible(false);
         }
     }
 
@@ -391,16 +397,20 @@ public class StationActivity extends Activity {
     private void updateBikeStatus(List<TraccarAttribute> attributeList) {
         TraccarBikeStatus traccarBikeStatus = null;
         String userId = null;
+        String attributeId = null;
         for (TraccarAttribute attribute : attributeList) {
-            if (attribute.getAlias().equals("BikeStatus") && attribute.getAttribute() != null) {
-                String temp[] = attribute.getAttribute().split(" ");
+            if (attribute.getAttribute().equals("BikeStatus") && attribute.getAlias() != null) {
+                String temp[] = attribute.getAlias().split(" ");
                 traccarBikeStatus = TraccarBikeStatus.valueOf(temp[0]);
                 if (temp.length > 1) {
                     userId = temp[1];
                 }
+                attributeId = attribute.getId();
+                break;
             }
         }
         if (traccarBikeStatus != null) {
+            this.traccarStatusAttributeId = attributeId;
             switch (traccarBikeStatus) {
                 case AVAILABLE:
                     station.setBikeStatus(BikeStatus.AVAILABLE);
@@ -421,6 +431,7 @@ public class StationActivity extends Activity {
                     break;
             }
         } else {
+            this.traccarStatusAttributeId = null;
             station.setBikeStatus(BikeStatus.AVAILABLE);
         }
         updateReserveBikeMenuIcon();
@@ -496,7 +507,11 @@ public class StationActivity extends Activity {
                 finish();
             }
             try {
-                URL url = new URL(ATTRIBUTES_URL);
+                String rawUrl = ATTRIBUTES_URL;
+                if (traccarStatusAttributeId != null) {
+                    rawUrl += "/" + traccarStatusAttributeId;
+                }
+                URL url = new URL(rawUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
                 String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
@@ -505,12 +520,19 @@ public class StationActivity extends Activity {
                 conn.setRequestProperty ("Authorization", basicAuth);
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Accept", "application/json");
-                conn.setRequestMethod("POST");
+                if (traccarStatusAttributeId == null) {
+                    conn.setRequestMethod("POST");
+                } else {
+                    conn.setRequestMethod("PUT");
+                }
 
                 JSONObject reservedPayload = new JSONObject();
-                reservedPayload.put("alias", "BikeStatus");
-                reservedPayload.put("attribute", TraccarBikeStatus.RESERVED.name() + " " + getUserLogin());
+                reservedPayload.put("attribute", "BikeStatus");
+                reservedPayload.put("alias", TraccarBikeStatus.RESERVED.name() + " " + getUserLogin());
                 reservedPayload.put("deviceId", bikeIds[0]);
+                if (traccarStatusAttributeId != null) {
+                    reservedPayload.put("id", traccarStatusAttributeId);
+                }
 
                 OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
                 wr.write(reservedPayload.toString());
@@ -549,6 +571,7 @@ public class StationActivity extends Activity {
                 try {
                     TraccarAttributeParser parser = new TraccarAttributeParser(s, TraccarAttributeParser.Type.SINGLE);
                     updateBikeStatus(parser.getAttributeList());
+                    Toast.makeText(StationActivity.this, "Bike status is now: " + station.getBikeStatus(), Toast.LENGTH_LONG).show();
                 } catch (ParseException e) {
                     Log.e(TAG, e.getMessage());
                     Toast.makeText(StationActivity.this,
@@ -573,7 +596,11 @@ public class StationActivity extends Activity {
                 finish();
             }
             try {
-                URL url = new URL(ATTRIBUTES_URL);
+                String rawUrl = ATTRIBUTES_URL;
+                if (traccarStatusAttributeId != null) {
+                    rawUrl += "/" + traccarStatusAttributeId;
+                }
+                URL url = new URL(rawUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
                 String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
@@ -582,18 +609,26 @@ public class StationActivity extends Activity {
                 conn.setRequestProperty ("Authorization", basicAuth);
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Accept", "application/json");
-                conn.setRequestMethod("POST");
+                if (traccarStatusAttributeId == null) {
+                    conn.setRequestMethod("POST");
+                } else {
+                    conn.setRequestMethod("PUT");
+                }
 
                 JSONObject reservedPayload = new JSONObject();
-                reservedPayload.put("alias", "BikeStatus");
-                reservedPayload.put("attribute", TraccarBikeStatus.ON_TRIP.name() + " " + getUserLogin());
+                reservedPayload.put("attribute", "BikeStatus");
+                reservedPayload.put("alias", TraccarBikeStatus.ON_TRIP.name() + " " + getUserLogin());
                 reservedPayload.put("deviceId", bikeIds[0]);
+                if (traccarStatusAttributeId != null) {
+                    reservedPayload.put("id", traccarStatusAttributeId);
+                }
 
                 OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
                 wr.write(reservedPayload.toString());
                 wr.flush();
 
                 StringBuilder response = new StringBuilder();
+                int responseCode = conn.getResponseCode();
                 if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
                     BufferedReader input = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                     String strLine;
@@ -654,9 +689,12 @@ public class StationActivity extends Activity {
                 HttpURLConnection conn = getTraccarConnection();
 
                 JSONObject reservedPayload = new JSONObject();
-                reservedPayload.put("alias", "BikeStatus");
-                reservedPayload.put("attribute", TraccarBikeStatus.AVAILABLE.name() + " " + getUserLogin());
+                reservedPayload.put("attribute", "BikeStatus");
+                reservedPayload.put("alias", TraccarBikeStatus.AVAILABLE.name() + " " + getUserLogin());
                 reservedPayload.put("deviceId", bikeIds[0]);
+                if (traccarStatusAttributeId != null) {
+                    reservedPayload.put("id", traccarStatusAttributeId);
+                }
 
                 OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
                 wr.write(reservedPayload.toString());
@@ -685,7 +723,11 @@ public class StationActivity extends Activity {
 
         @NonNull
         private HttpURLConnection getTraccarConnection() throws IOException {
-            URL url = new URL(ATTRIBUTES_URL);
+            String rawUrl = ATTRIBUTES_URL;
+            if (traccarStatusAttributeId != null) {
+                rawUrl += "/" + traccarStatusAttributeId;
+            }
+            URL url = new URL(rawUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             String userCredentials = "fajarmf@gmail.com:aP*_M\\dQ6S*-6/66";
             String basicAuth = "Basic " + new String(Base64.encode(userCredentials.getBytes(), 0));
@@ -694,7 +736,11 @@ public class StationActivity extends Activity {
             conn.setRequestProperty ("Authorization", basicAuth);
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestMethod("POST");
+            if (traccarStatusAttributeId == null) {
+                conn.setRequestMethod("POST");
+            } else {
+                conn.setRequestMethod("PUT");
+            }
             return conn;
         }
 
